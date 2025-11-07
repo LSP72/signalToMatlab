@@ -19,9 +19,12 @@ clc
 clear
 close all
 
+addpath("functions");
+addpath("matcfs64c");
+
 %% Export .cfs to .mat
 % IF ON MACOS, IGNORE THIS SECTION AND RUN THE NEXT ONE
-% 
+
 % % 1) Select the .cfs file
 % [cfFile, cfPath] = uigetfile({'*.cfs','Signal files (*.cfs)'}, ...
 %                               'Select the .cfs file');
@@ -108,18 +111,10 @@ new_stim = interp1(time_stim, stim, new_time_stim, 'spline');
 
 %% Detect stimulation times
 
-listOfStim = [] ;   % indices of detected stim events
-i = 1 ;
-Thr = 0.3; % threshold: stim signal above 0.5 V
-while i < length(new_stim)
-    if new_stim(i) > Thr    % looks when the stim signal is above 0.5V
-        listOfStim = [listOfStim, i];   % store index
-        i = i+300;    % skip ahead to exit the high-voltage plateau
-                      % and avoid multiple detections for a single pulse
-    else
-        i = i+1;    % if not, looks for the next piece of signal
-    end
-end
+Thr = 0.3; % threshold: stim signal above 0.3 V
+                                                                            % Indices of detected stim events
+listOfStim=(new_stim>Thr);                                                  % Values above threshold
+listOfStim=find(diff(listOfStim)==1)+1;                                     % Rising edges
 
 fprintf('OK — Stim detection completed.\n')
 
