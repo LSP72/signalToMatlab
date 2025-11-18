@@ -107,7 +107,7 @@ time_stim = linspace(0, end_time_stim, length(stim));   % actual time vector of 
 new_time_stim = (0:length(EMG)-1) / freq_EMG;           % new time vector of the stim matchnig the frequency of the EMG
 
 % Interpolation stim onto the EMG time base
-new_stim = interp1(time_stim, stim, new_time_stim, 'spline');
+new_stim = interp1(time_stim, stim, new_time_stim, 'linear');
 
 %% Detect stimulation times
 
