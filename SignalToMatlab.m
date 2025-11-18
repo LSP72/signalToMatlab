@@ -138,12 +138,21 @@ end
 
 %%
 % Extract all MEP segments
-allMEP = [];     % columns will be individual MEP segments
-for w = 1:size(MEPWindows,1)
-    fstart = MEPWindows(w,1);               % window start index
-    fend   = MEPWindows(w,2);               % window end index
-    EMG_window = EMG_filtered(fstart:fend); % segment from EMG signal
-    allMEP = [allMEP, EMG_window];          % append as a new column
+% Longueur cible (en nombre d'échantillons)
+winLen = MEPWindows(1,2) - MEPWindows(1,1) + 1;  % ou max(...) si ça varie
+
+nWin   = size(MEPWindows,1);
+allMEP = nan(winLen, nWin);   % pré-allocation avec NaN
+
+for w = 1:nWin
+    fstart = MEPWindows(w,1);
+    fend   = MEPWindows(w,2);
+
+    EMG_window = EMG_filtered(fstart:fend);
+    L = numel(EMG_window);
+
+    % Adding NaN values if window is smaller than the other
+    allMEP(1:L, w) = EMG_window;
 end
 
 % Create a time vectorfor plotting (in ms, aligned with the window definition)
