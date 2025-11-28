@@ -183,7 +183,6 @@ for k = 1:numel(names)
     on_ms  = NaN; off_ms = NaN;
     if ~isnan(idx_on),  on_ms  = time(idx_on);  end
     if ~isnan(idx_off), off_ms = time(idx_off); end
-    lat_ms = on_ms; % latency = onset time
 
     MEP.(lab).OnOff_ms       = [on_ms, off_ms];
     MEP.(lab).OnOff_idx      = [idx_on, idx_off];
@@ -191,7 +190,37 @@ for k = 1:numel(names)
     MEP.(lab).Baseline.SD    = sd;
     MEP.(lab).Thresholds.on  = thr_on;
     MEP.(lab).Thresholds.off = thr_off;
-    MEP.(lab).Latency_ms     = lat_ms;
+    MEP.(lab).Enveloppe      = env;
+
+    OnOff_all(k,:) = [on_ms, off_ms];
+
+    % Summary
+    Summ(k).Label       = lab;
+    Summ(k).BaseMean    = mu;
+    Summ(k).BaseSD      = sd;
+    Summ(k).ThrOn       = thr_on;
+    Summ(k).ThrOff      = thr_off;
+
+end
+
+% ---------- Save Meta & Summary ----------
+MEP.Meta.Params    = P;
+MEP.Meta.Fs        = Fs;
+MEP.Meta.Time_ms   = time(:).';
+MEP.Meta.OnOff_ms  = OnOff_all;
+MEP.Meta.MEP_Order = string(names);
+
+% Onset-Offset inspection and manual modification
+
+MEP=OnsetOffset_Inspection(MEP);
+
+for k=1:numel(names)
+    
+    on_ms=MEP.(['MEP_' num2str(k,'%02d')]).OnOff_ms(1,1);
+    off_ms=MEP.(['MEP_' num2str(k,'%02d')]).OnOff_ms(1,2);
+    idx_on=MEP.(['MEP_' num2str(k,'%02d')]).OnOff_idx(1,1);
+    idx_off=MEP.(['MEP_' num2str(k,'%02d')]).OnOff_idx(1,2);
+    sig=MEP.(['MEP_' num2str(k,'%02d')]).EMG;
 
     if ~isnan(idx_on) && ~isnan(idx_off) && idx_off > idx_on
         seg = sig(idx_on:idx_off);
@@ -204,45 +233,18 @@ for k = 1:numel(names)
         AUC_uVms     = NaN;
     end
 
+    MEP.(lab).Latency_ms    = on_ms;
     MEP.(lab).Duration_ms   = duration_ms;
     MEP.(lab).Peak2Peak_uV  = p2p_uV;
     MEP.(lab).AUC_uVms      = AUC_uVms;
 
-    OnOff_all(k,:) = [on_ms, off_ms];
-
-    % Summary
-    Summ(k).Label       = lab;
-    Summ(k).On_ms       = on_ms;
-    Summ(k).Off_ms      = off_ms;
-    Summ(k).Latency_ms  = lat_ms;
+    Summ(k).On_ms=MEP.Meta.OnOff_ms(k,1);
+    Summ(k).Off_ms=MEP.Meta.OnOff_ms(k,2);
+    Summ(k).Latency_ms  = on_ms;
     Summ(k).Duration_ms = duration_ms;
     Summ(k).P2P_uV      = p2p_uV;
     Summ(k).AUC_uVms    = AUC_uVms;
-    Summ(k).BaseMean    = mu;
-    Summ(k).BaseSD      = sd;
-    Summ(k).ThrOn       = thr_on;
-    Summ(k).ThrOff      = thr_off;
-
-    % 6) Debug plot
-    if P.debug_plots
-        figure('Color','w');
-        plot(time, env, 'LineWidth',1.2); hold on; grid on
-        yline(thr_on,'--','OnThr'); yline(thr_off,':','OffThr');
-        xline(P.base_ms(1),'k:'); xline(P.base_ms(2),'k:');
-        xline(P.search_ms(1),'m:'); xline(P.search_ms(2),'m:');
-        if ~isnan(idx_on),  xline(time(idx_on),'g-','Onset'); end
-        if ~isnan(idx_off), xline(time(idx_off),'r-','Offset'); end
-        title(sprintf('%s — RMS env & thresholds', lab), 'Interpreter', 'none');
-        xlabel('Time (ms)'); ylabel('RMS envelope (a.u.)');
-    end
 end
-
-% ---------- Save Meta & Summary ----------
-MEP.Meta.Params    = P;
-MEP.Meta.Fs        = Fs;
-MEP.Meta.Time_ms   = time(:).';
-MEP.Meta.OnOff_ms  = OnOff_all;
-MEP.Meta.MEP_Order = string(names);
 
 summary = struct2table(Summ);
 
