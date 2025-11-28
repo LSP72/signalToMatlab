@@ -5,7 +5,7 @@
 
     It expects a single .mat file as input. Therefore, the original
     Signal .cfs file must first be converted using Fabien's function:
-                                       'readCFSfile.m'
+                                       'readCFSfile.m'c
     Note: this function does not work on macOS.
 
     * * * * *
@@ -192,30 +192,20 @@ fprintf('OK — Onset/offset, peak-to-peak (p2p), latency, and AUC extracted aut
 
 %% === CSV export for statistical analysis: 1 row per MEP; columns = P2P, Latency, AUC ===
 
-% 1) Find the AUC column in T (robust to different naming conventions)
-if ismember('AUC', T.Properties.VariableNames)
-    AUCcol = T.AUC;
-elseif ismember('AUC_uVms', T.Properties.VariableNames)
-    AUCcol = T.AUC_uVms;
-elseif ismember('AreaRect_uVms', T.Properties.VariableNames)
-    AUCcol = T.AreaRect_uVms;
-else
-    error('AUC not found in table T. Make sure you added AUC/AUC_uVms/AreaRect_uVms in detectMEPOnsetOffset.');
-end
-
-% 2) Build the table to export (keep also the MEP label)
+% 1) Build the table to export (keep also the MEP label)
 ExportTab = table( ...
     T.Label, ...
     T.P2P_uV, ...
     T.Latency_ms, ...
-    AUCcol, ...
-    'VariableNames', {'MEP_Label','P2P_uV','Latency_ms','AUC_uVms'});
+    T.AUC_uVms, ...
+    T.SPduration_ms, ...
+    'VariableNames', {'MEP_Label','P2P_uV','Latency_ms','AUC_uVms','SP_ms'});
 
-% 3) Propose a default file name (same folder as the .mat)
+% 2) Propose a default file name (same folder as the .mat)
 [~, baseMatName] = fileparts(char(str_file));  % get .mat file name without extension
 defaultCSV = fullfile(char(str_file_dir), sprintf('%s_MEP_metrics.csv', baseMatName));
 
-% 4) Save location
+% 3) Save location
 [csvFile, csvPath] = uiputfile({'*.csv','CSV file (*.csv)'}, 'Save MEP metrics as...', defaultCSV);
 if isequal(csvFile,0)
     warning('CSV export canceled by user.');
