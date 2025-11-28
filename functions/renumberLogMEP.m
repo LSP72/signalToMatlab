@@ -2,7 +2,7 @@ function [MEP, MEP_SELECTION] = renumberLogMEP(selectedMEPs, selectedIdx, allMEP
 % RENUNBERLOGMEP Renumbers kept MEPs and logs removed ones, with nested fields.
 %
 % OUTPUT SHAPE EXAMPLE:
-%   MEP.MEP_01.EMG_MEP_01  -> column vector (EMG segment)
+%   MEP.MEP_01.EMG         -> column vector (EMG segment)
 %   MEP.MEP_01.orig_idx    -> original index in allMEP (before selection)
 %
 % INPUTS:
@@ -13,7 +13,7 @@ function [MEP, MEP_SELECTION] = renumberLogMEP(selectedMEPs, selectedIdx, allMEP
 % OUTPUTS:
 %   MEP : nested struct with fields "MEP_01", "MEP_02", ...
 %         Each sub-struct contains:
-%           - EMG_MEP_XX : the EMG segment
+%           - EMG        : the EMG segment
 %           - orig_idx   : original index in allMEP
 %   MEP_SELECTION : struct with
 %           .n_total
@@ -41,13 +41,13 @@ function [MEP, MEP_SELECTION] = renumberLogMEP(selectedMEPs, selectedIdx, allMEP
     removed_idx = setdiff(1:n_total, kept_idx);
 
     % --- Build nested struct:
-    %     MEP.MEP_XX.EMG_MEP_XX = selectedMEPs(:,k);
+    %     MEP.MEP_XX.EMG = selectedMEPs(:,k);
     %     MEP.MEP_XX.orig_idx   = kept_idx(k);
     MEP = struct();
     n_keep = size(selectedMEPs, 2);
     for k = 1:n_keep
         outerField = sprintf('MEP_%02d', k);
-        innerField = sprintf('EMG_MEP_%02d', k);
+        innerField = sprintf('EMG');
 
         % Create sub-struct and assign EMG segment + original index
         MEP.(outerField).(innerField) = selectedMEPs(:, k);
@@ -55,7 +55,7 @@ function [MEP, MEP_SELECTION] = renumberLogMEP(selectedMEPs, selectedIdx, allMEP
     end
 
     % All MEPs from "selectedMEPs" matrix
-    MEP.All         = selectedMEPs.';
+    MEP.All = selectedMEPs.';
 
     % --- Summary struct
     MEP_SELECTION = struct( ...
