@@ -8,16 +8,20 @@ axesArray = gobjects(nb_mep,1);
 plotsArray = gobjects(nb_mep,1);
 slider1 = gobjects(nb_mep,1);
 slider2 = gobjects(nb_mep,1);
+slider3 = gobjects(nb_mep,1);
+xline0 = gobjects(nb_mep,1);
 xline1 = gobjects(nb_mep,1);
 xline2 = gobjects(nb_mep,1);
+xline3 = gobjects(nb_mep,1);
 yline1 = gobjects(nb_mep,1);
 yline2 = gobjects(nb_mep,1);
 sliderLabel1 = gobjects(nb_mep,1);
 sliderLabel2 = gobjects(nb_mep,1);
+sliderLabel3 = gobjects(nb_mep,1);
 decal = 40;                                                                 % Used to align sliders with the axes
 modifmax=50;                                                                % Maximum manual offset
 
-axesPos = [20 150 680 400];
+axesPos = [20 160 680 400];
 
     for k = 1:nb_mep
         ax = uiaxes(fig,'Position',axesPos,'Visible','off');
@@ -32,32 +36,47 @@ axesPos = [20 150 680 400];
         xlabel(ax,'Time (ms)');
         ylabel(ax,'RMS Enveloppe (V)');
         title(ax,sprintf('MEP %d',k));
+        onset=MEP.Meta.OnOff_ms(k,1);
+        offset=MEP.Meta.OnOff_ms(k,2);
+        sp=offset+MEP.(['MEP_' num2str(k,'%02d')]).Silentperiod;
 
-        % xlines - onset & offset
-        xline1(k) = xline(ax, MEP.Meta.OnOff_ms(k,1), 'Color', 'b', 'LineWidth', 1.7, 'LineStyle', '--', 'Visible', 'off');
-        xline2(k) = xline(ax, MEP.Meta.OnOff_ms(k,2), 'Color', 'm', 'LineWidth', 1.7, 'LineStyle', '--', 'Visible', 'off');
+        % xlines - stim, onset, offset & silent period
+        xline0(k) = xline(ax, 0, 'Color', 'r', 'LineWidth', 1.5, 'LineStyle', ':', 'Visible', 'off');
+        xline1(k) = xline(ax, onset, 'Color', '#6B43E5', 'LineWidth', 1.7, 'LineStyle', '--', 'Visible', 'off');
+        xline2(k) = xline(ax, offset, 'Color', '#E54379', 'LineWidth', 1.7, 'LineStyle', '--', 'Visible', 'off');
+        xline3(k) = xline(ax, sp, 'Color', '#AA50DE', 'LineWidth', 1.7, 'LineStyle', '--', 'Visible', 'off');
+
         % ylines - onset & offset thresholds
-        yline1(k) = yline(ax, MEP.(['MEP_' num2str(k,'%02d')]).Thresholds.on, 'Color', 'b', 'LineWidth', .7, 'LineStyle', '--', 'Visible', 'off');
-        yline2(k) = yline(ax, MEP.(['MEP_' num2str(k,'%02d')]).Thresholds.off, 'Color', 'm', 'LineWidth', .7, 'LineStyle', '--', 'Visible', 'off');
+        yline1(k) = yline(ax, MEP.(['MEP_' num2str(k,'%02d')]).Thresholds.on, 'Color', '#6B43E5', 'LineWidth', .7, 'LineStyle', '--', 'Visible', 'off');
+        yline2(k) = yline(ax, MEP.(['MEP_' num2str(k,'%02d')]).Thresholds.off, 'Color', '#E54379', 'LineWidth', .7, 'LineStyle', '--', 'Visible', 'off');
 
         % Slider 1 (Onset)
         slider1(k) = uislider(fig, ...
-            'Position',[axesPos(1)+decal 100 axesPos(3)-decal 3], ...
-            'Limits',[MEP.Meta.OnOff_ms(k,1)-modifmax MEP.Meta.OnOff_ms(k,1)+modifmax], ...
-            'Value',MEP.Meta.OnOff_ms(k,1), ...
+            'Position',[axesPos(1)+decal 120 axesPos(3)-decal 3], ...
+            'Limits',[onset-modifmax onset+modifmax], ...
+            'Value',onset, ...
             'Visible','off');
         slider1(k).ValueChangingFcn = @(s,e) updateXline1(k,e.Value);
 
         % Slider 2 (Offset)
         slider2(k) = uislider(fig, ...
-            'Position',[axesPos(1)+decal 60 axesPos(3)-decal 3], ...
-            'Limits',[MEP.Meta.OnOff_ms(k,2)-modifmax MEP.Meta.OnOff_ms(k,2)+modifmax], ...
-            'Value',MEP.Meta.OnOff_ms(k,2), ...
+            'Position',[axesPos(1)+decal 80 axesPos(3)-decal 3], ...
+            'Limits',[offset-modifmax offset+modifmax], ...
+            'Value',offset, ...
             'Visible','off');
         slider2(k).ValueChangingFcn = @(s,e) updateXline2(k,e.Value);
 
-        sliderLabel1(k) = uilabel(fig,'Text','Onset','Position',[axesPos(1) 92 50 20],'FontWeight','bold','Visible','off','FontColor','b');
-        sliderLabel2(k) = uilabel(fig,'Text','Offset','Position',[axesPos(1) 52 50 20],'FontWeight','bold','Visible','off','FontColor','m');
+        % Slider 3 (Silent Period)
+        slider3(k) = uislider(fig, ...
+            'Position',[axesPos(1)+decal 40 axesPos(3)-decal 3], ...
+            'Limits',[0 400], ...
+            'Value',sp, ...
+            'Visible','off');
+        slider3(k).ValueChangingFcn = @(s,e) updateXline3(k,e.Value);
+
+        sliderLabel1(k) = uilabel(fig,'Text','Onset','Position',[axesPos(1)-10 112 50 20],'FontWeight','bold','Visible','off','FontColor','#6B43E5');
+        sliderLabel2(k) = uilabel(fig,'Text','Offset','Position',[axesPos(1)-10 72 50 20],'FontWeight','bold','Visible','off','FontColor','#E54379');
+        sliderLabel3(k) = uilabel(fig,'Text','Sil.Per.','Position',[axesPos(1)-10 32 50 20],'FontWeight','bold','Visible','off','FontColor','#AA50DE');
 
     end
 
@@ -86,17 +105,25 @@ axesPos = [20 150 680 400];
         xline2(idx).Value = val;
     end
 
+    function updateXline3(idx, val)
+        xline3(idx).Value = val;
+    end
+
     function hideCurve(idx)
         axesArray(idx).Visible = 'off';
         plotsArray(idx).Visible = 'off';
         slider1(idx).Visible = 'off';
         slider2(idx).Visible = 'off';
+        slider3(idx).Visible = 'off';
+        xline0(idx).Visible = 'off';
         xline1(idx).Visible = 'off';
         xline2(idx).Visible = 'off';
+        xline3(idx).Visible = 'off';
         yline1(idx).Visible = 'off';
         yline2(idx).Visible = 'off';
         sliderLabel1(idx).Visible = 'off';
         sliderLabel2(idx).Visible = 'off';
+        sliderLabel3(idx).Visible = 'off';
     end
 
     function showCurve(idx)
@@ -104,15 +131,20 @@ axesPos = [20 150 680 400];
         plotsArray(idx).Visible = 'on';
         slider1(idx).Visible = 'on';
         slider2(idx).Visible = 'on';
+        slider3(idx).Visible = 'on';
+        xline0(idx).Visible = 'on';
         xline1(idx).Visible = 'on';
         xline2(idx).Visible = 'on';
+        xline3(idx).Visible = 'on';
         yline1(idx).Visible = 'on';
         yline2(idx).Visible = 'on';
         sliderLabel1(idx).Visible = 'on';
         sliderLabel2(idx).Visible = 'on';
+        sliderLabel3(idx).Visible = 'on';
 
         slider1(idx).Value = xline1(idx).Value;
         slider2(idx).Value = xline2(idx).Value;
+        slider3(idx).Value = xline3(idx).Value;
     end
 
     function switchCurve(dir)
@@ -142,6 +174,7 @@ axesPos = [20 150 680 400];
             positions_idx(i,2) = find(abs(x - xline2(i).Value) == min(abs(x - xline2(i).Value)), 1);
             MEPnew.(['MEP_' num2str(i,'%02d')]).OnOff_ms=positions(i,:);
             MEPnew.(['MEP_' num2str(i,'%02d')]).OnOff_idx=positions_idx(i,:);
+            MEPnew.(['MEP_' num2str(i,'%02d')]).Silentperiod=xline3(i).Value-xline2(i).Value;
         end
         MEPnew.Meta.OnOff_ms=positions;
         uiresume(fig);

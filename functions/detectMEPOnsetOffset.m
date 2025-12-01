@@ -7,7 +7,7 @@ function [MEP, summary] = detectMEPOnsetOffset(MEP, varargin)
 %
 % USAGE (with overrides):
 %   P = struct('rms_ms',5,'base_ms',[-100 -20],'search_ms',[10 100], ...
-%              'k_on',2.5,'k_off',1.5,'hold_on_ms',5,'hold_off_ms',5,'debug_plots',true);
+%              'k_on',2.5,'k_off',1.5,'hold_on_ms',5,'hold_off_ms',5);
 %   [MEP, T] = detectMEPOnsetOffset(MEP, 'Params', P, 'Fs', Fs, 'Time', time);
 %
 % Inputs (Name-Value):
@@ -28,8 +28,7 @@ Pdef = struct( ...
     'k_on',        2, ...           % onset threshold = mean + k_on * SD
     'k_off',       1.5, ...         % offset threshold (hysteresis)
     'hold_on_ms',  5, ...           % minimum duration above threshold (ms)
-    'hold_off_ms', 5, ...           % minimum duration below threshold (ms)
-    'debug_plots', true ...         % enable/disable plots
+    'hold_off_ms', 5 ...            % minimum duration below threshold (ms)
 );
 EMGPrefix = 'EMG';
 Fs = [];
@@ -106,8 +105,8 @@ assert(any(bIdx) && any(sIdx), ...
 % ---------- Loop over each MEP ----------
 OnOff_all = nan(numel(names), 2);
 Summ = struct('Label',{},'On_ms',{},'Off_ms',{},'Latency_ms',{}, ...
-              'Duration_ms',{},'P2P_uV',{}, 'AUC_uVms',{}, 'BaseMean',{},'BaseSD',{}, ...
-              'ThrOn',{},'ThrOff',{});
+              'Duration_ms',{},'P2P_uV',{}, 'AUC_uVms',{},'SPduration_ms',{}, 'BaseMean',{},'BaseSD',{}, ...
+              'ThrOn',{},'ThrOff',{},'ThrSP',{});
 
 for k = 1:numel(names)
     lab = names{k}; % ex: 'MEP_01'
@@ -133,6 +132,7 @@ for k = 1:numel(names)
     sd = std(env(bIdx));
     thr_on  = mu + P.k_on  * sd;
     thr_off = mu + P.k_off * sd;
+    thr_sp  = mu; 
 
     % 3) Onset detection (choix du plus gros burst au-dessus du seuil)
     env_s = env(sIdx);                         % enveloppe dans la fenêtre de recherche
@@ -179,7 +179,18 @@ for k = 1:numel(names)
         end
     end
 
-    % 5) Save results (ms / idx / metrics)
+    % 5) Silent period detection
+
+    env_post = env(idx_off:end);
+    poff_rel = firstRun(env_post < thr_sp, 0);                              % First index post-offset below the sp threshold
+    idx_poff = idx_off + poff_rel - 1;
+
+    decal=100;                                                              % Right offset to avoid values above threshold post-MEP
+    env_sp = env(idx_off+decal:end);
+    sp_rel = firstRun(env_sp > thr_sp, 0);                                  % First index above threshold
+    idx_sp = idx_poff + decal + sp_rel -1;
+
+    % 6) Save results (ms / idx / metrics)
     on_ms  = NaN; off_ms = NaN;
     if ~isnan(idx_on),  on_ms  = time(idx_on);  end
     if ~isnan(idx_off), off_ms = time(idx_off); end
@@ -190,7 +201,9 @@ for k = 1:numel(names)
     MEP.(lab).Baseline.SD    = sd;
     MEP.(lab).Thresholds.on  = thr_on;
     MEP.(lab).Thresholds.off = thr_off;
+    MEP.(lab).Thresholds.sp  = thr_sp;
     MEP.(lab).Enveloppe      = env;
+    MEP.(lab).Silentperiod   = time(idx_sp)-off_ms;
 
     OnOff_all(k,:) = [on_ms, off_ms];
 
@@ -200,6 +213,7 @@ for k = 1:numel(names)
     Summ(k).BaseSD      = sd;
     Summ(k).ThrOn       = thr_on;
     Summ(k).ThrOff      = thr_off;
+    Summ(k).ThrSP       = thr_sp;
 
 end
 
@@ -220,6 +234,7 @@ for k=1:numel(names)
     off_ms=MEP.(['MEP_' num2str(k,'%02d')]).OnOff_ms(1,2);
     idx_on=MEP.(['MEP_' num2str(k,'%02d')]).OnOff_idx(1,1);
     idx_off=MEP.(['MEP_' num2str(k,'%02d')]).OnOff_idx(1,2);
+    SPD=MEP.(['MEP_' num2str(k,'%02d')]).Silentperiod;
     sig=MEP.(['MEP_' num2str(k,'%02d')]).EMG;
 
     if ~isnan(idx_on) && ~isnan(idx_off) && idx_off > idx_on
@@ -240,10 +255,11 @@ for k=1:numel(names)
 
     Summ(k).On_ms=MEP.Meta.OnOff_ms(k,1);
     Summ(k).Off_ms=MEP.Meta.OnOff_ms(k,2);
-    Summ(k).Latency_ms  = on_ms;
-    Summ(k).Duration_ms = duration_ms;
-    Summ(k).P2P_uV      = p2p_uV;
-    Summ(k).AUC_uVms    = AUC_uVms;
+    Summ(k).Latency_ms    = on_ms;
+    Summ(k).Duration_ms   = duration_ms;
+    Summ(k).P2P_uV        = p2p_uV;
+    Summ(k).AUC_uVms      = AUC_uVms;
+    Summ(k).SPduration_ms = SPD;
 end
 
 summary = struct2table(Summ);
