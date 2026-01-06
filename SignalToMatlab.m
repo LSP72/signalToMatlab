@@ -136,8 +136,7 @@ for t = 1:length(listOfStim)
     MEPWindows = [MEPWindows; wdw]; % collect windows
 end
 
-%%
-% Extract all MEP segments
+%% Extract all MEP segments
 % Longueur cible (en nombre d'échantillons)
 winLen = MEPWindows(1,2) - MEPWindows(1,1) + 1;  % ou max(...) si ça varie
 
@@ -155,7 +154,7 @@ for w = 1:nWin
     allMEP(1:L, w) = EMG_window;
 end
 
-% Create a time vectorfor plotting (in ms, aligned with the window definition)
+% Create a time vector for plotting (in ms, aligned with the window definition)
 time =  linspace(-100, 500, size(allMEP,1));
 
 % Select valid MEPs (manual/GUI function)
@@ -171,11 +170,10 @@ time =  linspace(-100, 500, size(allMEP,1));
 % Time centering aroung 0 ms = stim index in MEP window
 stimIdx0 = round(0.1 * freq_EMG); % sample for 100 ms (0-based)
 
-% Store at global level (only valid) % ???
+% Store at global level (only valid) 
 MEP.Meta.Time_ms = time(:).';
-MEP.Meta.StimIdx = stimIdx0 + 1; % 1-based % ???
+MEP.Meta.StimIdx = stimIdx0 + 1;
 MEP.Meta.Fs      = freq_EMG;
-% Meta ???
 
 % Create a struct with all individual MEPs using original naming
 originalNamedMEPs = namingMEP(selectedMEPs, selectedIdx);   % creates a struct,
