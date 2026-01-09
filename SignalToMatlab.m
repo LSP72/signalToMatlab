@@ -65,16 +65,20 @@ fprintf('OK — MAT loaded (%s). Fields reindexed.\n', str_file);
 fields_tmp = fieldnames(tmp);
 raw_indexed_data = tmp.(fields_tmp{1});
 raw_fields = fieldnames(raw_indexed_data);
-
+EMG_field = "EMG_"+num2str(5);
 % Reindexing the structure to use labels easier
 data = struct();
 for i =1:3
     data.(raw_fields{i}) = raw_indexed_data.(raw_fields{i});
 end
-for i = 4:numel(raw_fields)
+nb_EMGs = 1;
+for i = 4:numel(raw_fields)-nb_EMGs
     oldName = raw_fields{i};
     newName = oldName(1:end-2);   % removes the last 2 chars ('_X')
     data.(newName) = raw_indexed_data.(oldName);
+end
+for i = numel(raw_fields)-nb_EMGs+1:numel(raw_fields)
+    data.(raw_fields{i}) = raw_indexed_data.(raw_fields{i});
 end
 
 %% Get signals : EMG / Stim
@@ -82,8 +86,11 @@ end
 % Get the EMG signal and filter it
 % TODO: there may be multiple EMG channels
 %       => decide how to select the appropriate channel
-EMG = data.EMG.dat;
-freq_EMG = data.EMG.FreqS;
+
+if any(strcmp(raw_fields, EMG_field))
+    EMG = data.EMG_field.dat;
+    freq_EMG = data.EMG_field.FreqS;
+end
 
 % Using Silvère's filtering function
 EMG_filtered = filtrage(EMG, freq_EMG, 20, 1000);
