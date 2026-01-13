@@ -60,13 +60,16 @@ str_file_dir = convertCharsToStrings(file_dir);
 str_file_path = str_file_dir + str_file;
 tmp = load(str_file_path);
 fprintf('OK — MAT loaded (%s). Fields reindexed.\n', str_file);
-                                % POURQUOI ??
+
+%% Selecting the EMG used
+msg = sprintf('Enter the number of the\nEMG that was used:');
+NumEMG = inputdlg(msg, 'Input Required', 1, {'0'});
+EMG_field = "EMG_"+NumEMG{1};
 %% Cleaning the field names
 
 fields_tmp = fieldnames(tmp);
 raw_indexed_data = tmp.(fields_tmp{1});
 raw_fields = fieldnames(raw_indexed_data);
-EMG_field = "EMG_"+num2str(5);
 % Reindexing the structure to use labels easier
 data = struct();
 for i =1:3
