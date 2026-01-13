@@ -51,7 +51,8 @@ addpath("matcfs64c");
 % fprintf('MAT file saved: %s\n', matFull);
 
 %% Looking for the file & loading the data
-% IF ON WINDOWS, YOU CAN DIRECTLY RUN THE ABOVE SECTION AND PASS THIS ONE
+% IF ON WINDOWS, YOU CAN DIRECTLY RUN THE ABOVE SECTION BUT RUN THAT ONE
+% TOO
 
 [file, file_dir] = uigetfile('*.mat');
 str_file = convertCharsToStrings(file);
@@ -88,8 +89,8 @@ end
 %       => decide how to select the appropriate channel
 
 if any(strcmp(raw_fields, EMG_field))
-    EMG = data.EMG_field.dat;
-    freq_EMG = data.EMG_field.FreqS;
+    EMG = data.(EMG_field).dat;
+    freq_EMG = data.(EMG_field).FreqS;
 end
 
 % Using Silvère's filtering function
@@ -142,6 +143,7 @@ for t = 1:length(listOfStim)
     wdw = [minus, plus];            % time indexes of the window around the stim
     MEPWindows = [MEPWindows; wdw]; % collect windows
 end
+fprintf('OK — MEP windows created.\n')
 
 %% Extract all MEP segments
 % Longueur cible (en nombre d'échantillons)
@@ -192,19 +194,25 @@ fprintf('OK — MEP struct created and renumbered (MEP_01..MEP_%02d). Selection 
 %% Analyse of the MEPS
 
 % Detect valid MEP windows + peak-to-peak + latency (automatic)
+
 [MEP, T] = detectMEPOnsetOffset(MEP, 'Fs', freq_EMG);
 fprintf('OK — Onset/offset, peak-to-peak (p2p), latency, and AUC extracted automatically.\n');
 
 %% === CSV export for statistical analysis: 1 row per MEP; columns = P2P, Latency, AUC ===
 
 % 1) Build the table to export (keep also the MEP label)
+% Convert T.Signal to a string to export it to csv after:
+T.SignalString = cellfun(@(x) sprintf('%g,', x), T.Signal, 'UniformOutput', false);
+T.SignalString = cellfun(@(s) s(1:end-1), T.SignalString, 'UniformOutput', false);
+
 ExportTab = table( ...
     T.Label, ...
     T.P2P_uV, ...
     T.Latency_ms, ...
     T.AUC_uVms, ...
     T.SPduration_ms, ...
-    'VariableNames', {'MEP_Label','P2P_uV','Latency_ms','AUC_uVms','SP_ms'});
+    T.SignalString, ...
+    'VariableNames', {'MEP_Label','P2P_uV','Latency_ms','AUC_uVms','SP_ms','Raw_signal'});
 
 % 2) Propose a default file name (same folder as the .mat)
 [~, baseMatName] = fileparts(char(str_file));  % get .mat file name without extension

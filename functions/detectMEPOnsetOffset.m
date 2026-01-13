@@ -214,6 +214,7 @@ for k = 1:numel(names)
     Summ(k).ThrOn       = thr_on;
     Summ(k).ThrOff      = thr_off;
     Summ(k).ThrSP       = thr_sp;
+    Summ(k).Signal      = MEP.(lab).EMG;
 
 end
 
