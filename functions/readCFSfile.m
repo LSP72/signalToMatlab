@@ -31,7 +31,7 @@ for j=1:channels
     for i=1:length(dsVec)
        [startOffset,points,yScale,yOffset,xScale,xOffset]=matcfs64c('cfsGetDSChan',fhandle,j-1,dsVec(i));
 
-        if startsWith(channelName,"ADC") && i==1
+        if startsWith(channelName,"ADC0") && i==1
             stim_offset=xOffset;                                            % to check potential offset with EMG
         end
         
