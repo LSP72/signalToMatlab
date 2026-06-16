@@ -27,6 +27,8 @@ axesPos = [20 160 680 400];
         ax = uiaxes(fig,'Position',axesPos,'Visible','off');
         ax.Box = 'on';
         axesArray(k) = ax;
+        modifmax_on = modifmax;
+        modifmax_off = modifmax;
 
         x = MEP.Meta.Time_ms;
         y = MEP.(['MEP_' num2str(k,'%02d')]).Enveloppe;
@@ -39,6 +41,16 @@ axesPos = [20 160 680 400];
         onset=MEP.Meta.OnOff_ms(k,1);
         offset=MEP.Meta.OnOff_ms(k,2);
         sp=offset+MEP.(['MEP_' num2str(k,'%02d')]).Silentperiod;
+        onset(isnan(onset)) = 0;
+        offset(isnan(offset)) = 0;
+        sp(isnan(sp)) = 0;
+
+        if onset == 0
+            modifmax_on = 100;
+        end
+        if offset == 0
+            modifmax_off = 150;
+        end
 
         % xlines - stim, onset, offset & silent period
         xline0(k) = xline(ax, 0, 'Color', 'r', 'LineWidth', 1.5, 'LineStyle', ':', 'Visible', 'off');
@@ -53,7 +65,7 @@ axesPos = [20 160 680 400];
         % Slider 1 (Onset)
         slider1(k) = uislider(fig, ...
             'Position',[axesPos(1)+decal 120 axesPos(3)-decal 3], ...
-            'Limits',[onset-modifmax onset+modifmax], ...
+            'Limits',[0 onset+modifmax_on], ...
             'Value',onset, ...
             'Visible','off');
         slider1(k).ValueChangingFcn = @(s,e) updateXline1(k,e.Value);
@@ -61,7 +73,7 @@ axesPos = [20 160 680 400];
         % Slider 2 (Offset)
         slider2(k) = uislider(fig, ...
             'Position',[axesPos(1)+decal 80 axesPos(3)-decal 3], ...
-            'Limits',[offset-modifmax offset+modifmax], ...
+            'Limits',[0 offset+modifmax_off], ...
             'Value',offset, ...
             'Visible','off');
         slider2(k).ValueChangingFcn = @(s,e) updateXline2(k,e.Value);
