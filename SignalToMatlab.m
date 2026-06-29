@@ -122,7 +122,7 @@ new_stim = interp1(time_stim, stim, new_time_stim, 'linear');
 
 %% Detect stimulation times
 
-Thr = 0.3; % threshold: stim signal above 0.3 V
+Thr = 0.1*max(new_stim); % threshold: stim signal above 10% of max voltage
                                                                             % Indices of detected stim events
 listOfStim=(new_stim>Thr);                                                  % Values above threshold
 listOfStim=find(diff(listOfStim)==1)+1;                                     % Rising edges

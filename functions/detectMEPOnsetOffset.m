@@ -180,20 +180,22 @@ for k = 1:numel(names)
     end
 
     % 5) Silent period detection
-
-    env_post = env(idx_off:end);
-    poff_rel = firstRun(env_post < thr_sp, 0);                              % First index post-offset below the sp threshold
-    idx_poff = idx_off + poff_rel - 1;
-
-    decal=100;                                                              % Right offset to avoid values above threshold post-MEP
-    env_sp = env(idx_off+decal:end);
-    sp_rel = firstRun(env_sp > thr_sp, 0);                                  % First index above threshold
-    idx_sp = idx_poff + decal + sp_rel -1;
+    idx_sp = NaN;
+    if ~isnan(idx_off)
+        decal=100;                                                          % Right offset to avoid values above threshold post-MEP
+        env_sp = env(idx_off+decal:end);                                    % First index post-offset below the sp threshold
+        sp_rel = firstRun(env_sp > thr_sp, 0);                              % First index above threshold
+        idx_sp = idx_off + decal + sp_rel -1;
+        if isempty(idx_sp)
+            idx_sp = NaN;
+        end
+    end
 
     % 6) Save results (ms / idx / metrics)
-    on_ms  = NaN; off_ms = NaN;
+    on_ms  = NaN; off_ms = NaN; sp_ms = NaN;
     if ~isnan(idx_on),  on_ms  = time(idx_on);  end
     if ~isnan(idx_off), off_ms = time(idx_off); end
+    if ~isnan(idx_sp), sp_ms = time(idx_sp)-off_ms; end
 
     MEP.(lab).OnOff_ms       = [on_ms, off_ms];
     MEP.(lab).OnOff_idx      = [idx_on, idx_off];
@@ -203,7 +205,7 @@ for k = 1:numel(names)
     MEP.(lab).Thresholds.off = thr_off;
     MEP.(lab).Thresholds.sp  = thr_sp;
     MEP.(lab).Enveloppe      = env;
-    MEP.(lab).Silentperiod   = time(idx_sp)-off_ms;
+    MEP.(lab).Silentperiod   = sp_ms;
 
     OnOff_all(k,:) = [on_ms, off_ms];
 
