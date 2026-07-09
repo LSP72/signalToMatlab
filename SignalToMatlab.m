@@ -65,6 +65,7 @@ fprintf('OK — MAT loaded (%s). Fields reindexed.\n', str_file);
 msg = sprintf('Enter the number of the\nEMG that was used:');
 NumEMG = inputdlg(msg, 'Input Required', 1, {'0'});
 EMG_field = "EMG_"+NumEMG{1};
+nb_EMGs = 1;
 %% Cleaning the field names
 
 fields_tmp = fieldnames(tmp);
@@ -75,14 +76,17 @@ data = struct();
 for i =1:3
     data.(raw_fields{i}) = raw_indexed_data.(raw_fields{i});
 end
-nb_EMGs = 1;
+
 for i = 4:numel(raw_fields)-nb_EMGs
     oldName = raw_fields{i};
     newName = oldName(1:end-2);   % removes the last 2 chars ('_X')
     data.(newName) = raw_indexed_data.(oldName);
 end
+emgPlace = i-1; % place of the first EMG channel
 for i = numel(raw_fields)-nb_EMGs+1:numel(raw_fields)
-    data.(raw_fields{i}) = raw_indexed_data.(raw_fields{i});
+    % oldEMGName = raw_fields{i};
+    % newEMGName = [oldEMGName(1:end-2), '_', int2str(i - emgPlace)];  % removes the last 2 chars ('_X')
+    data.(EMG_field) = raw_indexed_data.(raw_fields{i});
 end
 
 %% Get signals : EMG / Stim
@@ -91,7 +95,7 @@ end
 % TODO: there may be multiple EMG channels
 %       => decide how to select the appropriate channel
 
-if any(strcmp(raw_fields, EMG_field))
+if any(strcmp(fieldnames(data), EMG_field))
     EMG = data.(EMG_field).dat;
     freq_EMG = data.(EMG_field).FreqS;
 end
