@@ -21,10 +21,14 @@ yline2 = gobjects(nb_mep,1);
 sliderLabel1 = gobjects(nb_mep,1);
 sliderLabel2 = gobjects(nb_mep,1);
 sliderLabel3 = gobjects(nb_mep,1);
+checkboxIncluded = gobjects(nb_mep,1);
 decal = 40;                                                                 % Used to align sliders with the axes
 modifmax=50;                                                                % Maximum manual offset
+fitYWindow = false;                                                         % Whether the Y axis is fit to the -100/100ms window only
+yFitRange = [-100 100];
 
 axesPos = [20 160 680 400];
+btnX = axesPos(1)+axesPos(3)+30;
 
     for k = 1:nb_mep
         ax = uiaxes(fig,'Position',axesPos,'Visible','off');
@@ -94,13 +98,27 @@ axesPos = [20 160 680 400];
         sliderLabel2(k) = uilabel(fig,'Text','Offset','Position',[axesPos(1)-10 72 50 20],'FontWeight','bold','Visible','off','FontColor','#E54379');
         sliderLabel3(k) = uilabel(fig,'Text','Sil.Per.','Position',[axesPos(1)-10 32 50 20],'FontWeight','bold','Visible','off','FontColor','#AA50DE');
 
+        % Checkbox - include/exclude this MEP from the exported structure
+        checkboxIncluded(k) = uicheckbox(fig, ...
+            'Text','Included if checked', ...
+            'Position',[btnX 405 150 22], ...
+            'Value',true, ...
+            'FontWeight','bold', ...
+            'Visible','off');
+
     end
+
+    % Checkbox - fit the Y axis to the MEP window only
+    fitYCheckbox = uicheckbox(fig, ...
+        'Text','Fit Y axis on MEP window (-100 to 100 ms)', ...
+        'Position',[axesPos(1) axesPos(2)+axesPos(4)+5 400 22], ...
+        'Value',false, ...
+        'ValueChangedFcn',@(src,evt) toggleFitY(src.Value));
 
     % Initial display
     showCurve(1);
 
     % Buttons to switch curves
-    btnX = axesPos(1)+axesPos(3)+30;
     uibutton(fig,'Text','⏮️ First','Position',[btnX 350 120 40],'ButtonPushedFcn',@(btn,event) jumpTo(1));
     uibutton(fig,'Text','⬅️ Previous','Position',[btnX 280 120 40],'ButtonPushedFcn',@(btn,event) switchCurve(-1));
     uibutton(fig,'Text','Next ➡️','Position',[btnX 210 120 40],'ButtonPushedFcn',@(btn,event) switchCurve(1));
@@ -109,7 +127,7 @@ axesPos = [20 160 680 400];
     'FontColor','r','BackgroundColor',fig.Color,'ButtonPushedFcn',@(btn,event) finishCallback());
 
     lblInfo = uilabel(fig,'Text',sprintf('MEP %d / %d',currentIndex,nb_mep), ...
-    'Position',[btnX 400 120 30],'FontSize',14,'FontWeight','bold');
+    'Position',[btnX 440 130 30],'FontSize',14,'FontWeight','bold');
 
 %%  Functions
 %%
@@ -140,6 +158,7 @@ axesPos = [20 160 680 400];
         sliderLabel1(idx).Visible = 'off';
         sliderLabel2(idx).Visible = 'off';
         sliderLabel3(idx).Visible = 'off';
+        checkboxIncluded(idx).Visible = 'off';
     end
 
     function showCurve(idx)
@@ -157,10 +176,45 @@ axesPos = [20 160 680 400];
         sliderLabel1(idx).Visible = 'on';
         sliderLabel2(idx).Visible = 'on';
         sliderLabel3(idx).Visible = 'on';
+        checkboxIncluded(idx).Visible = 'on';
 
         slider1(idx).Value = xline1(idx).Value;
         slider2(idx).Value = xline2(idx).Value;
         slider3(idx).Value = xline3(idx).Value;
+
+        applyYFit(idx);
+    end
+
+    function toggleFitY(value)
+        fitYWindow = logical(value);
+        applyYFit(currentIndex);
+    end
+
+    function applyYFit(idx)
+        ax = axesArray(idx);
+        if ~fitYWindow
+            ax.YLimMode = 'auto';
+            return
+        end
+
+        xdata = plotsArray(idx).XData;
+        ydata = plotsArray(idx).YData;
+        winMask = xdata >= yFitRange(1) & xdata <= yFitRange(2);
+        windowData = ydata(winMask);
+
+        if isempty(windowData)
+            ax.YLimMode = 'auto';
+            return
+        end
+
+        yMin = min(windowData);
+        yMax = max(windowData);
+        if yMax == yMin
+            pad = max(abs(yMin), 1) * 0.1;
+        else
+            pad = (yMax - yMin) * 0.05;
+        end
+        ax.YLim = [yMin - pad, yMax + pad];
     end
 
     function switchCurve(dir)
@@ -191,6 +245,7 @@ axesPos = [20 160 680 400];
             MEPnew.(mepNames{i}).OnOff_ms=positions(i,:);
             MEPnew.(mepNames{i}).OnOff_idx=positions_idx(i,:);
             MEPnew.(mepNames{i}).Silentperiod=xline3(i).Value-xline2(i).Value;
+            MEPnew.(mepNames{i}).Included=logical(checkboxIncluded(i).Value);
         end
         MEPnew.Meta.OnOff_ms=positions;
         uiresume(fig);

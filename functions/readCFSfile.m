@@ -10,6 +10,8 @@ function DataExtract = readCFSfile(file)
 % frequency sampling.
 
 READ=0;
+DSVAR=1;
+RL8=6;
 [fhandle]=matcfs64c('cfsOpenFile',file,READ,0); % read only
 
 [time,date,comment]=matcfs64c('cfsGetGenInfo',fhandle);
@@ -18,6 +20,23 @@ READ=0;
 DataExtract.Acquisition_time = time ;
 DataExtract.Acquisition_date = date ;
 DataExtract.comment = comment ;
+DataExtract.DataSections = dataSections ;
+
+% FrameStart (seconds since Acquisition_time).
+% Used later to match frames to the Brainsight neuronavigation samples.
+% Left empty if not present.
+DataExtract.FrameStart_s = [];
+for v = 1:DSVars
+    [~,varType,~,varDesc] = matcfs64c('cfsGetVarDesc',fhandle,v-1,DSVAR);
+    if varType == RL8 && strcmp(strtrim(varDesc),'Start')
+        frameStart = nan(dataSections,1);
+        for i = 1:dataSections
+            frameStart(i) = matcfs64c('cfsGetVarVal',fhandle,v-1,DSVAR,i,RL8);
+        end
+        DataExtract.FrameStart_s = frameStart;
+        break
+    end
+end
 
 if dataSections > 1
     dsVec=1:dataSections;
@@ -38,8 +57,11 @@ for j=1:channels
         if i==1
             DataExtract.(channelName).dat = [] ;
             DataExtract.(channelName).FreqS = 1/xScale ;
+            if startsWith(channelName,"EMG")
+                DataExtract.(channelName).PointsPerFrame = zeros(dataSections,1);
+            end
         end
-         
+
         if points > 0
             startPt=0;
             [data]=matcfs64c('cfsGetChanData',fhandle,j-1,dsVec(i),startPt,points,dataType);
@@ -55,6 +77,9 @@ for j=1:channels
                         data=[data ; frm_offset];
                     end
                 end
+                % Number of samples this frame contributes to the concatenated vector.
+                % Used later to map a sample index back to its frame of origin.
+                DataExtract.(channelName).PointsPerFrame(i) = numel(data);
             end
 
             DataExtract.(channelName).dat = [ DataExtract.(channelName).dat ; data ] ;

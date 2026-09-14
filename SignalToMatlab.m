@@ -5,7 +5,7 @@
 
     It expects a single .mat file as input. Therefore, the original
     Signal .cfs file must first be converted using Fabien's function:
-                                       'readCFSfile.m'c
+                                       'readCFSfile.m'
     Note: this function does not work on macOS.
 
     * * * * *
@@ -86,12 +86,17 @@ else
 end
 
 % Reindexing the structure to use labels easier
+metaFieldNames = {'Acquisition_time','Acquisition_date','comment','DataSections','FrameStart_s'};
+metaFieldNames = metaFieldNames(ismember(metaFieldNames, raw_fields));
+
 data = struct();
-for i =1:3
-    data.(raw_fields{i}) = raw_indexed_data.(raw_fields{i});
+for i = 1:numel(metaFieldNames)
+    data.(metaFieldNames{i}) = raw_indexed_data.(metaFieldNames{i});
 end
-for i = 4:numel(raw_fields)-nb_EMGs
-    oldName = raw_fields{i};
+
+channelFieldNames = setdiff(raw_fields, [metaFieldNames(:); available_EMGs(:)], 'stable');
+for i = 1:numel(channelFieldNames)
+    oldName = channelFieldNames{i};
     newName = oldName(1:end-2);   % removes the last 2 chars ('_X')
     data.(newName) = raw_indexed_data.(oldName);
 end
@@ -147,6 +152,59 @@ listOfStim=find(diff(listOfStim)==1)+1;                                     % Ri
 
 fprintf('OK — Stim detection completed.\n')
 
+% Map each detected stim to its originating frame using the EMG sample counts.
+if isfield(data,EMG_field) && isfield(data.(EMG_field),'PointsPerFrame')
+    frameBoundaries = cumsum(data.(EMG_field).PointsPerFrame);
+    stimFrameIdx = nan(size(listOfStim));
+    for t = 1:numel(listOfStim)
+        f = find(listOfStim(t) <= frameBoundaries, 1, 'first');
+        if isempty(f)
+            f = numel(frameBoundaries);
+        end
+        stimFrameIdx(t) = f;
+    end
+else
+    stimFrameIdx = [];
+end
+
+%% Match Brainsight neuronavigation errors
+
+% Runs automatically if exactly one *.txt is found next to the *.mat file
+
+BrainsightTable = table();
+matchedRows = nan(numel(listOfStim),1);
+
+hasFrameTiming = isfield(data,'Acquisition_time') && isfield(data,'FrameStart_s') ...
+    && ~isempty(data.FrameStart_s) && ~isempty(stimFrameIdx);
+
+bsCandidates = dir(fullfile(char(str_file_dir), '*.txt'));
+if ~hasFrameTiming
+    fprintf('Brainsight matching skipped (no CFS frame timing available for this .mat).\n');
+elseif isempty(bsCandidates)
+    fprintf('Brainsight matching skipped (no .txt found in %s).\n', str_file_dir);
+elseif numel(bsCandidates) > 1
+    warning('Brainsight matching skipped — multiple .txt files found in %s: %s', ...
+        char(str_file_dir), strjoin({bsCandidates.name}, ', '));
+else
+    BrainsightTable = readBrainsightSamples(fullfile(bsCandidates(1).folder, bsCandidates(1).name));
+    [matchedRows, MatchLog] = matchBrainsightErrors( ...
+        data.Acquisition_time, data.FrameStart_s, stimFrameIdx, BrainsightTable);
+    fprintf('OK — Brainsight errors matched (%d/%d stims, file: %s).\n', ...
+        MatchLog.nMatched, MatchLog.nTotal, bsCandidates(1).name);
+end
+
+% Stim errors (one per column of allMEP), for display in selectingMEP.
+BrainsightErrors = struct( ...
+    'TargetError_mm',   nan(numel(listOfStim),1), ...
+    'AngularError_deg', nan(numel(listOfStim),1), ...
+    'TwistError_deg',   nan(numel(listOfStim),1));
+validMatch = ~isnan(matchedRows);
+if any(validMatch)
+    BrainsightErrors.TargetError_mm(validMatch)   = BrainsightTable.TargetError(matchedRows(validMatch));
+    BrainsightErrors.AngularError_deg(validMatch) = BrainsightTable.AngularError(matchedRows(validMatch));
+    BrainsightErrors.TwistError_deg(validMatch)   = BrainsightTable.TwistError(matchedRows(validMatch));
+end
+
 %% Build MEP windows
 % Define the window where the MEP should appear (stim -100 ms, stim +500 ms)
 
@@ -188,7 +246,7 @@ end
 time =  linspace(-100, 500, size(allMEP,1));
 
 % Select valid MEPs (manual/GUI function)
-[selectedMEPs, selectedIdx] = selectingMEP(allMEP, time);
+[selectedMEPs, selectedIdx] = selectingMEP(allMEP, time, BrainsightErrors);
 
 %% MEPs structure
 % Create MEP struct (keep valid MEPs and rename to MEP_01, MEP_02, ... original naming is reported too)
@@ -200,10 +258,22 @@ time =  linspace(-100, 500, size(allMEP,1));
 % Time centering aroung 0 ms = stim index in MEP window
 stimIdx0 = round(0.1 * freq_EMG); % sample for 100 ms (0-based)
 
-% Store at global level (only valid) 
+% Store at global level (only valid)
 MEP.Meta.Time_ms = time(:).';
 MEP.Meta.StimIdx = stimIdx0 + 1;
 MEP.Meta.Fs      = freq_EMG;
+
+% CFS frame timing for Brainsight error matching.
+if isfield(data,'Acquisition_time')
+    MEP.Meta.Acquisition_time = data.Acquisition_time;
+end
+if isfield(data,'Acquisition_date')
+    MEP.Meta.Acquisition_date = data.Acquisition_date;
+end
+if isfield(data,'FrameStart_s')
+    MEP.Meta.FrameStart_s = data.FrameStart_s;
+end
+MEP.Meta.StimFrameIdx = stimFrameIdx;
 
 % Create a struct with all individual MEPs using original naming
 originalNamedMEPs = namingMEP(selectedMEPs, selectedIdx);   % creates a struct,
@@ -218,6 +288,11 @@ fprintf('OK — MEP struct created and renumbered (MEP_01..MEP_%02d). Selection 
 
 [MEP, T] = detectMEPOnsetOffset(MEP, 'Fs', freq_EMG);
 fprintf('OK — Onset/offset, peak-to-peak (p2p), latency, and AUC extracted automatically.\n');
+
+% Attach the Brainsight errors to the MEP field.
+if any(validMatch)
+    MEP = attachBrainsightErrors(MEP, matchedRows, BrainsightTable);
+end
 
 %% Structure export
 
@@ -239,6 +314,21 @@ end
 T.SignalString = cellfun(@(x) sprintf('%g,', x), T.Signal, 'UniformOutput', false);
 T.SignalString = cellfun(@(s) s(1:end-1), T.SignalString, 'UniformOutput', false);
 
+nMEP = height(T);
+TargetError_mm   = nan(nMEP,1);
+AngularError_deg = nan(nMEP,1);
+TwistError_deg   = nan(nMEP,1);
+Distance_mm      = nan(nMEP,1);
+for i = 1:nMEP
+    lbl = T.Label{i};
+    if isfield(MEP,lbl) && isfield(MEP.(lbl),'Brainsight')
+        TargetError_mm(i)   = MEP.(lbl).Brainsight.TargetError_mm;
+        AngularError_deg(i) = MEP.(lbl).Brainsight.AngularError_deg;
+        TwistError_deg(i)   = MEP.(lbl).Brainsight.TwistError_deg;
+        Distance_mm(i)      = MEP.(lbl).Brainsight.Distance_mm;
+    end
+end
+
 ExportTab = table( ...
     T.Label, ...
     T.P2P_uV, ...
@@ -246,7 +336,12 @@ ExportTab = table( ...
     T.AUC_uVms, ...
     T.SPduration_ms, ...
     T.SignalString, ...
-    'VariableNames', {'MEP_Label','P2P_uV','Latency_ms','AUC_uVms','SP_ms','Raw_signal'});
+    TargetError_mm, ...
+    AngularError_deg, ...
+    TwistError_deg, ...
+    Distance_mm, ...
+    'VariableNames', {'MEP_Label','P2P_uV','Latency_ms','AUC_uVms','SP_ms','Raw_signal', ...
+                       'TargetError_mm','AngularError_deg','TwistError_deg','Distance_mm'});
 
 % 2) Propose a default file name (same folder as the .mat)
 defaultCSV = fullfile(char(str_file_dir), sprintf('%s_MEP_metrics.csv', baseMatName));
