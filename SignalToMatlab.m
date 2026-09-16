@@ -138,7 +138,7 @@ fprintf('OK — EMG filtered (20–1000 Hz, Fs=%.1f Hz). Stim loaded (Fs=%.1f Hz
 
 end_time_stim = length(stim)*(1/freq_stim);
 time_stim = linspace(0, end_time_stim, length(stim));   % actual time vector of the recorder stim
-new_time_stim = (0:length(EMG)-1) / freq_EMG;           % new time vector of the stim matchnig the frequency of the EMG
+new_time_stim = (0:length(EMG)-1) / freq_EMG;           % new time vector of the stim matching the frequency of the EMG
 
 % Interpolation stim onto the EMG time base
 new_stim = interp1(time_stim, stim, new_time_stim, 'linear');
@@ -203,6 +203,60 @@ if any(validMatch)
     BrainsightErrors.TargetError_mm(validMatch)   = BrainsightTable.TargetError(matchedRows(validMatch));
     BrainsightErrors.AngularError_deg(validMatch) = BrainsightTable.AngularError(matchedRows(validMatch));
     BrainsightErrors.TwistError_deg(validMatch)   = BrainsightTable.TwistError(matchedRows(validMatch));
+end
+
+%% Double footswitch: optional gait-phase separation
+
+% If 3 ADC channels are present (ADC0 = stim, ADC1/ADC2 = two footswitches)
+% this section offers to split the MEPs by gait-cycle phase.
+
+dataFields = fieldnames(data);
+adcFields = dataFields(startsWith(dataFields, 'ADC'));
+hasDoubleFS = numel(adcFields) == 3 && all(ismember({'ADC0','ADC1','ADC2'}, adcFields));
+
+phaseChoice = "";
+
+if hasDoubleFS
+    choice = questdlg( ...
+        sprintf('%d ADC channels detected (stim + 2 footswitches). Split the MEPs by gait-cycle phase ?', numel(adcFields)), ...
+        'Double Footswitch', 'Yes', 'No', 'No');
+
+    if strcmp(choice, 'Yes')
+        freqFS = data.ADC1.FreqS;
+        [GaitPhase, FSInfo] = identifyGaitPhase(data.ADC1.dat, data.ADC2.dat, freqFS, listOfStim, freq_EMG);
+
+        fprintf('OK — Gait phase identified for %d/%d stims (%d unresolved; %d alternation conflicts resolved automatically).\n', ...
+            sum(GaitPhase ~= "Unknown"), numel(listOfStim), sum(GaitPhase == "Unknown"), FSInfo.nAltConflict);
+        for ch = ["FS1","FS2"]
+            n = FSInfo.frontVotes.(ch) + FSInfo.backVotes.(ch) + FSInfo.unknownVotes.(ch);
+            fprintf('   %s triggered %d stims — front criterion: %d/%d, back criterion: %d/%d  =>  assigned as %s\n', ...
+                ch, n, FSInfo.frontVotes.(ch), n, FSInfo.backVotes.(ch), n, FSInfo.position.(ch));
+        end
+
+        phaseAnswer = questdlg( ...
+            'Which gait-cycle phase do you want to analyse?', ...
+            'Gait Phase Selection', 'Heel-off (~40%)', 'Toe-off (~60%)', 'Heel-off (~40%)');
+
+        if strcmp(phaseAnswer, 'Toe-off (~60%)')
+            phaseChoice = "60pct";
+        else
+            phaseChoice = "40pct";
+        end
+
+        keepMask = (GaitPhase == phaseChoice);
+        fprintf('OK — Keeping %d/%d stims for phase %s (%d excluded: other phase or unresolved).\n', ...
+            sum(keepMask), numel(listOfStim), phaseChoice, numel(listOfStim) - sum(keepMask));
+
+        listOfStim   = listOfStim(keepMask);
+        stimFrameIdx = stimFrameIdx(keepMask);
+
+        % Keep the Brainsight data aligned with the filtered stims.
+        matchedRows = matchedRows(keepMask);
+        BrainsightErrors.TargetError_mm   = BrainsightErrors.TargetError_mm(keepMask);
+        BrainsightErrors.AngularError_deg = BrainsightErrors.AngularError_deg(keepMask);
+        BrainsightErrors.TwistError_deg   = BrainsightErrors.TwistError_deg(keepMask);
+        validMatch = ~isnan(matchedRows);
+    end
 end
 
 %% Build MEP windows
@@ -274,6 +328,9 @@ if isfield(data,'FrameStart_s')
     MEP.Meta.FrameStart_s = data.FrameStart_s;
 end
 MEP.Meta.StimFrameIdx = stimFrameIdx;
+if phaseChoice ~= ""
+    MEP.Meta.GaitPhase = char(phaseChoice);
+end
 
 % Create a struct with all individual MEPs using original naming
 originalNamedMEPs = namingMEP(selectedMEPs, selectedIdx);   % creates a struct,
@@ -297,6 +354,9 @@ end
 %% Structure export
 
 [~, baseMatName] = fileparts(char(str_file));  % get .mat file name without extension
+if phaseChoice ~= ""
+    baseMatName = sprintf('%s_%s', baseMatName, phaseChoice);
+end
 default=fullfile(char(str_file_dir), sprintf('%s_MEPs',baseMatName));
 [matFile, matPath] = uiputfile({'*.mat'},'Save MEP structure as :', default);
 if isequal(matFile,0)
