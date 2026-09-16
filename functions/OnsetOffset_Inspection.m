@@ -9,6 +9,7 @@ currentIndex = 1;
 
 axesArray = gobjects(nb_mep,1);
 plotsArray = gobjects(nb_mep,1);
+plotsArrayRaw = gobjects(nb_mep,1);
 slider1 = gobjects(nb_mep,1);
 slider2 = gobjects(nb_mep,1);
 slider3 = gobjects(nb_mep,1);
@@ -18,6 +19,7 @@ xline2 = gobjects(nb_mep,1);
 xline3 = gobjects(nb_mep,1);
 yline1 = gobjects(nb_mep,1);
 yline2 = gobjects(nb_mep,1);
+ylineRawZero = gobjects(nb_mep,1);
 sliderLabel1 = gobjects(nb_mep,1);
 sliderLabel2 = gobjects(nb_mep,1);
 sliderLabel3 = gobjects(nb_mep,1);
@@ -26,6 +28,8 @@ decal = 40;                                                                 % Us
 modifmax=50;                                                                % Maximum manual offset
 fitYWindow = false;                                                         % Whether the Y axis is fit to the -100/100ms window only
 yFitRange = [-100 100];
+envelopeVisible = true;                                                     % Whether the RMS envelope curve is shown
+showRawSignal = false;                                                      % Whether the raw MEP signal is overlaid on the envelope
 
 axesPos = [20 160 680 400];
 btnX = axesPos(1)+axesPos(3)+30;
@@ -39,11 +43,23 @@ btnX = axesPos(1)+axesPos(3)+30;
 
         x = MEP.Meta.Time_ms;
         y = MEP.(mepNames{k}).Enveloppe;
+        yyaxis(ax,'left');
         plotsArray(k) = plot(ax,x,y,'Visible','off','Color','k','LineWidth',1);
         ax.XLim = [min(x) 400];
+        ax.YAxis(1).Color = 'k';
+        ylabel(ax,'RMS Envelope (V)');
+
+        if isfield(MEP.(mepNames{k}),'EMG')
+            yRaw = MEP.(mepNames{k}).EMG;
+            yyaxis(ax,'right');
+            plotsArrayRaw(k) = plot(ax,x,yRaw,'Visible','off','Color',[0.6 0.6 0.6],'LineWidth',0.8);
+            ylabel(ax,'Raw MEP signal (V)');
+            ax.YAxis(2).Color = [0.6 0.6 0.6];
+            ylineRawZero(k) = yline(ax, 0, 'Color', [0.85 0.85 0.85], 'LineWidth', 1, 'LineStyle', '--', 'Visible', 'off');
+            yyaxis(ax,'left');
+        end
 
         xlabel(ax,'Time (ms)');
-        ylabel(ax,'RMS Enveloppe (V)');
         title(ax,mepNames{k},'Interpreter','none');
         onset=MEP.Meta.OnOff_ms(k,1);
         offset=MEP.Meta.OnOff_ms(k,2);
@@ -108,10 +124,26 @@ btnX = axesPos(1)+axesPos(3)+30;
 
     end
 
+    checkboxRowY = axesPos(2)+axesPos(4)+5;
+
+    % Checkbox - show/hide the RMS envelope
+    envCheckbox = uicheckbox(fig, ...
+        'Text','Show MEP envelope', ...
+        'Position',[axesPos(1) checkboxRowY 190 22], ...
+        'Value',true, ...
+        'ValueChangedFcn',@(src,evt) toggleEnvelope(src.Value));
+
+    % Checkbox - overlay the raw MEP signal
+    showRawCheckbox = uicheckbox(fig, ...
+        'Text','Show raw MEP signal', ...
+        'Position',[axesPos(1)+200 checkboxRowY 200 22], ...
+        'Value',false, ...
+        'ValueChangedFcn',@(src,evt) toggleShowRaw(src.Value));
+
     % Checkbox - fit the Y axis to the MEP window only
     fitYCheckbox = uicheckbox(fig, ...
         'Text','Fit Y axis on MEP window (-100 to 100 ms)', ...
-        'Position',[axesPos(1) axesPos(2)+axesPos(4)+5 400 22], ...
+        'Position',[axesPos(1)+410 checkboxRowY 400 22], ...
         'Value',false, ...
         'ValueChangedFcn',@(src,evt) toggleFitY(src.Value));
 
@@ -144,8 +176,17 @@ btnX = axesPos(1)+axesPos(3)+30;
     end
 
     function hideCurve(idx)
-        axesArray(idx).Visible = 'off';
+        ax = axesArray(idx);
+        ax.Visible = 'off';
         plotsArray(idx).Visible = 'off';
+        ax.YAxis(1).Visible = 'off';
+        ax.YAxis(1).Label.Visible = 'off';
+        if isgraphics(plotsArrayRaw(idx))
+            plotsArrayRaw(idx).Visible = 'off';
+            ylineRawZero(idx).Visible = 'off';
+            ax.YAxis(2).Visible = 'off';
+            ax.YAxis(2).Label.Visible = 'off';
+        end
         slider1(idx).Visible = 'off';
         slider2(idx).Visible = 'off';
         slider3(idx).Visible = 'off';
@@ -163,7 +204,8 @@ btnX = axesPos(1)+axesPos(3)+30;
 
     function showCurve(idx)
         axesArray(idx).Visible = 'on';
-        plotsArray(idx).Visible = 'on';
+        updateEnvelopeVisibility(idx);
+        updateRawVisibility(idx);
         slider1(idx).Visible = 'on';
         slider2(idx).Visible = 'on';
         slider3(idx).Visible = 'on';
@@ -171,8 +213,6 @@ btnX = axesPos(1)+axesPos(3)+30;
         xline1(idx).Visible = 'on';
         xline2(idx).Visible = 'on';
         xline3(idx).Visible = 'on';
-        yline1(idx).Visible = 'on';
-        yline2(idx).Visible = 'on';
         sliderLabel1(idx).Visible = 'on';
         sliderLabel2(idx).Visible = 'on';
         sliderLabel3(idx).Visible = 'on';
@@ -190,31 +230,99 @@ btnX = axesPos(1)+axesPos(3)+30;
         applyYFit(currentIndex);
     end
 
+    function toggleShowRaw(value)
+        showRawSignal = logical(value);
+        updateRawVisibility(currentIndex);
+    end
+
+    function toggleEnvelope(value)
+        envelopeVisible = logical(value);
+        updateEnvelopeVisibility(currentIndex);
+    end
+
+    function updateEnvelopeVisibility(idx)
+        ax = axesArray(idx);
+        onOff = onOffText(envelopeVisible);
+        plotsArray(idx).Visible = onOff;
+        yline1(idx).Visible = onOff;
+        yline2(idx).Visible = onOff;
+        ax.YAxis(1).Visible = 'on';
+        ax.YAxis(1).Label.Visible = onOff;
+        if envelopeVisible
+            ax.YAxis(1).TickValuesMode = 'auto';
+            ax.YAxis(1).TickLabelsMode = 'auto';
+        else
+            ax.YAxis(1).TickValues = [];
+        end
+    end
+
+    function updateRawVisibility(idx)
+        if ~isgraphics(plotsArrayRaw(idx))
+            return
+        end
+        ax = axesArray(idx);
+        plotsArrayRaw(idx).Visible = onOffText(showRawSignal);
+        ylineRawZero(idx).Visible = onOffText(showRawSignal);
+        ax.YAxis(2).Visible = 'on';
+        ax.YAxis(2).Label.Visible = onOffText(showRawSignal);
+        if showRawSignal
+            ax.YAxis(2).Color = [0.6 0.6 0.6];
+            ax.YAxis(2).TickValuesMode = 'auto';
+            ax.YAxis(2).TickLabelsMode = 'auto';
+        else
+            ax.YAxis(2).Color = 'k';
+            ax.YAxis(2).TickValues = [];
+        end
+    end
+
+    function s = onOffText(tf)
+        if tf
+            s = 'on';
+        else
+            s = 'off';
+        end
+    end
+
     function applyYFit(idx)
         ax = axesArray(idx);
+
+        yyaxis(ax,'left');
         if ~fitYWindow
             ax.YLimMode = 'auto';
-            return
-        end
-
-        xdata = plotsArray(idx).XData;
-        ydata = plotsArray(idx).YData;
-        winMask = xdata >= yFitRange(1) & xdata <= yFitRange(2);
-        windowData = ydata(winMask);
-
-        if isempty(windowData)
-            ax.YLimMode = 'auto';
-            return
-        end
-
-        yMin = min(windowData);
-        yMax = max(windowData);
-        if yMax == yMin
-            pad = max(abs(yMin), 1) * 0.1;
         else
-            pad = (yMax - yMin) * 0.05;
+            fitAxisToWindow(plotsArray(idx));
         end
-        ax.YLim = [yMin - pad, yMax + pad];
+
+        if isgraphics(plotsArrayRaw(idx))
+            yyaxis(ax,'right');
+            if ~fitYWindow
+                ax.YLimMode = 'auto';
+            else
+                fitAxisToWindow(plotsArrayRaw(idx));
+            end
+            yyaxis(ax,'left');
+        end
+
+        function fitAxisToWindow(plotObj)
+            xdata = plotObj.XData;
+            ydata = plotObj.YData;
+            winMask = xdata >= yFitRange(1) & xdata <= yFitRange(2);
+            windowData = ydata(winMask);
+
+            if isempty(windowData)
+                ax.YLimMode = 'auto';
+                return
+            end
+
+            yMin = min(windowData);
+            yMax = max(windowData);
+            if yMax == yMin
+                pad = max(abs(yMin), 1) * 0.1;
+            else
+                pad = (yMax - yMin) * 0.05;
+            end
+            ax.YLim = [yMin - pad, yMax + pad];
+        end
     end
 
     function switchCurve(dir)
